@@ -48,10 +48,10 @@ int main() {
                               SND_PCM_FORMAT_U8);
 
   /* Two channels (stereo) */
-  snd_pcm_hw_params_set_channels(handle, params, 2);
+  snd_pcm_hw_params_set_channels(handle, params, 1);
 
   /* 44100 bits/second sampling rate (CD quality) */
-  val = 44100;
+  val = 60;
   snd_pcm_hw_params_set_rate_near(handle, params,
                                   &val, &dir);
 
@@ -72,13 +72,13 @@ int main() {
   /* Use a buffer large enough to hold one period */
   snd_pcm_hw_params_get_period_size(params,
                                       &frames, &dir);
-  size = frames * 4; /* 2 bytes/sample, 2 channels */
+  size = frames * 1; /* 2 bytes/sample, 2 channels */
   buffer = (unsigned char *) malloc(size);
 
   /* We want to loop for 5 seconds */
   snd_pcm_hw_params_get_period_time(params,
                                          &val, &dir);
-  loops = 5000000 / val;
+  loops = 50000000 / val;
 
   while (loops > 0) {
     loops--;
@@ -95,7 +95,10 @@ int main() {
       fprintf(stderr, "short read, read %d frames\n", rc);
     }
     //rc = write(1, buffer, size);
-    printf("%d\n",buffer[0]);
+    for(int i =0;i <size;i++){ printf("%d ", buffer[i]);}
+
+
+    printf("\n");
    // if (rc != size)
       //fprintf(stderr,
               //"short write: wrote %d bytes\n", rc);

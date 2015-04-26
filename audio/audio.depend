@@ -1,4 +1,4 @@
 # depslib dependency file v1.0
-1429677064 source:/home/juni/project/Audio/audio/main.cpp
+1430057118 source:/home/juni/project/Audio/audio/main.cpp
 	<alsa/asoundlib.h>
 
