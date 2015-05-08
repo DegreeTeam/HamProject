@@ -108,7 +108,7 @@ void *data_sending_handler()
 {
 	int i;
       for(i = 0; i < cnt; i++) {
-           if (send(*(sockid[i]), buffer, SIZE, 0) <= 0) {
+           if ( *(sockid[i]) != -1 &&  (send(*(sockid[i]), buffer, SIZE, 0) <= 0)   ) {
                closesock(sockid[i]);
                printf("close sock\n : %d", sockid[i]);
             }           
@@ -117,7 +117,7 @@ void *data_sending_handler()
 void closesock(int *sock)
 {
 	close(*sock);
-	free(sock);
+	*sock = -1;
 }
 void *data_streaming(void *socket_desc)
 {
