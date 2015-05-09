@@ -11,11 +11,14 @@
 #include <errno.h>
 #include <alsa/asoundlib.h>
 #define ALSA_PCM_NEW_HW_PARAMS_API
-#define SIZE 1024
+#define SIZE 128
+
 void *data_sending(void *);
 void *data_sending_handler();
 void *data_streaming(void *);
 void closesock(int *sock);
+void *int_hanler();
+
 pthread_mutex_t  mutex = PTHREAD_MUTEX_INITIALIZER;
 unsigned char *buffer;
 int **sockid;
@@ -27,6 +30,13 @@ int main(int argc , char *argv[])
     int socket_desc , client_sock , c , *new_sock;
     struct sockaddr_in server , client;
     pthread_t sniffer_thread1, sniffer_thread2;
+	
+        struct sigaction usr;
+        memset(&usr,0,sizeof(struct sigaction));
+        sigemptyset(&usr);
+        sa_usr.sa_handler = int_handler;
+        sigaction(SIGINT, &sa_usr, NULL);
+
 
     buffer = (unsigned char *) malloc(SIZE);
     sockid = (int**) malloc(sizeof(int*) * 40);
@@ -215,4 +225,13 @@ printf("frmes :%d ", frames);
     return 0;
 }
 
-
+void *int_handler()
+{
+int i;
+for (i = 0; i < cnt; i++) {
+           if ( *(sockid[i]) != -1 ) {
+               closesock(sockid[i]);
+               printf("close sock\n : %d", sockid[i]);
+            }
+     }
+}
