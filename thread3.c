@@ -1,4 +1,4 @@
-#include <sys/types.h>test
+#include <sys/types.h>
 #include<stdio.h>
 #include<string.h>    //strlen
 #include<stdlib.h>    //strlen
