@@ -1,3 +1,4 @@
+#include<sys/types.h>
 #include <sys/types.h>
 #include<stdio.h>
 #include<string.h>    //strlen
@@ -10,30 +11,44 @@
 #include <signal.h>
 #include <errno.h>
 #include <alsa/asoundlib.h>
-#include <signal.h>
-#include <unistd.h>
-
+#include <time.h>
 #define ALSA_PCM_NEW_HW_PARAMS_API
-#define SIZE 128
+#define SIZE 32 
 
-void *connection_handler(void *);
+void *data_sending(void *);
+void data_sending_handler();
 void *data_streaming(void *);
-void usr_handler(int signo);
+void closesock(int *sock, int index);
+void int_handler();
 
 pthread_mutex_t  mutex = PTHREAD_MUTEX_INITIALIZER;
 unsigned char *buffer;
-int *sigid;
+int **sockid;
+int *delsock;
 int cnt = 0;
-
+int delcnt = 0;
+int tid;
+int socket_desc;
+int flag;
+int rc = 0;
 int main(int argc , char *argv[])
 {
-    int socket_desc , client_sock , c , *new_sock;
+    int client_sock , c , *new_sock;
     struct sockaddr_in server , client;
-    pthread_t sniffer_thread1;
-    buffer = (unsigned char *) malloc(SIZE);
-    sigid = (int *) malloc(sizeof(int)*40);
-    memset(sigid, 0, sizeof(int) * 40);
+    pthread_t sniffer_thread1, sniffer_thread2;
+    int bValid = 1;
+    struct sigaction usr;
 
+    flag =1;
+    memset(&usr,0,sizeof(struct sigaction));
+    usr.sa_handler = int_handler;
+    sigemptyset(&usr.sa_mask);
+    sigaction(SIGINT, &usr, NULL);
+    buffer = (unsigned char *) malloc(SIZE);
+    sockid = (int**) malloc(sizeof(int*) * 40);
+   memset(sockid,0 , sizeof(int*) * 40);
+    delsock = (int*)malloc(sizeof(int)*20);
+    memset(delsock, 0, sizeof(int)*20);
     //Prepare the sockaddr_in structure
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -46,6 +61,8 @@ int main(int argc , char *argv[])
     {
         printf("Could not create socket");
     }
+
+    setsockopt(socket_desc, SOL_SOCKET, SO_REUSEADDR,&bValid,sizeof(bValid));
 
     //Bind
     if( bind(socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0)
@@ -62,33 +79,32 @@ int main(int argc , char *argv[])
     //Accept and incoming connection
     puts("Waiting for incoming connections...");
     c = sizeof(struct sockaddr_in);
-   
-    pthread_t sniffer_thread;
 
     if(pthread_create(&sniffer_thread1 , NULL , data_streaming , (void*) new_sock) < 0)
        {
             perror("could not create thread");
             return 1;
         }
-
+	
+    if(pthread_create(&sniffer_thread2 , NULL , data_sending , (void*) new_sock) < 0)
+       {
+            perror("could not create thread");
+            return 1;
+        }
+	tid = sniffer_thread2;
     while(1){
-
-    if(client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c))
-        {
+	 if(client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c))
+	  {
 		puts("Connection accepted");
                 new_sock = malloc(4);
                 *new_sock = client_sock;
         }
-        if( pthread_create(&sniffer_thread , NULL ,  connection_handler , (void*) new_sock) < 0)
-        {
-            perror("could not create thread");
-            return 1;
-        }
-	sigid[cnt++] = sniffer_thread;
-        //Now join the thread , so that we dont terminate before the thread
-        //pthread_join( sniffer_thread , NULL);
-        puts("Handler assigned");
+	   if (cnt < 40)
+		   	 sockid[cnt++] = new_sock;
+	   else
+		   	sockid[delsock[delcnt--]] = new_sock;
 
+       puts("Handler assigned");
 
     if (client_sock < 0)
     {
@@ -98,36 +114,33 @@ int main(int argc , char *argv[])
 }
     return 0;
 }
-
-/*
- * This will handle connection for each client
- * */
-void *connection_handler(void *socket_desc)
+void *data_sending(void *socket_desc)
 {
-    struct sigaction sa_usr1;
-
-   memset(&sa_usr1, 0, sizeof(sa_usr1));
-   sa_usr1.sa_handler =usr_handler;
-   sigemptyset(&sa_usr1.sa_mask);
-   sigaction(SIGUSR1, &sa_usr1, NULL);
-
-    //Get the socket descriptor
-    int sock = *(int*)socket_desc;
-
-	for(;;){
+	struct sigaction sa_usr;
+	memset(&sa_usr,0,sizeof(struct sigaction));
+	sa_usr.sa_handler = data_sending_handler;
+	sigemptyset(&sa_usr.sa_mask);
+	sigaction(SIGUSR1, &sa_usr, NULL);
+	
+	while(1)
 		pause();
-		if (send(sock, buffer, SIZE, 0) <= 0) {
-			break;
-		}
+}
+void data_sending_handler()
+{
+	int i;
+      	for(i = 0; i < cnt;i++) {
+           if ( *(sockid[i]) != -1 &&  (send(*(sockid[i]), buffer, SIZE, 0) < 0 || signal(SIGPIPE, SIG_IGN) == SIG_ERR )   ) {
+               closesock(sockid[i],i);
+               printf("close sock\n : %d",*sockid[i]);
+            }
 	}
-	close(sock);
-    return 0;
 }
-
-void usr_handler(int signum){
+void closesock(int *sock,int index)
+{
+	delsock[delcnt++] = index;
+	close(*sock);
+	*sock = -1;
 }
-
-
 void *data_streaming(void *socket_desc)
 {
   int rc;
@@ -170,7 +183,7 @@ void *data_streaming(void *socket_desc)
   snd_pcm_hw_params_set_channels(handle, params, 1);
 
   /* 44100 bits/second sampling rate (CD quality) */
-  val = 32768;
+  val = 22400;
   snd_pcm_hw_params_set_rate_near(handle, params,
                                   &val, &dir);
 
@@ -199,18 +212,16 @@ void *data_streaming(void *socket_desc)
   
   while (1) {
         pthread_mutex_lock(&mutex);
-   	rc = snd_pcm_readi(handle, buffer, frames);
+        rc = snd_pcm_readi(handle, buffer, frames);
+        pthread_kill(tid, SIGUSR1);
         pthread_mutex_unlock(&mutex);
-	 for (i = 0; i < cnt; i++)
-		pthread_kill(sigid[i],SIGUSR1);
+
     if (rc == -EPIPE) {
       /* EPIPE means overrun */
       fprintf(stderr, "overrun occurred\n");
       snd_pcm_prepare(handle);
     } else if (rc < 0) {
-      fprintf(stderr,
-              "error from read: %s\n",
-              snd_strerror(rc));
+      fprintf(stderr,"error from read: %s\n",snd_strerror(rc));
     } else if (rc != (int)frames) {
       fprintf(stderr, "short read, read %d frames\n", rc);
     }
@@ -219,5 +230,20 @@ void *data_streaming(void *socket_desc)
   snd_pcm_drain(handle);
   snd_pcm_close(handle);
   free(buffer);
-  return 0;
+
+    return 0;
 }
+
+void int_handler()
+{
+	int i;
+		for (i = 0; i < cnt; i++) {
+           if ( *(sockid[i]) != -1 ) {
+               close(*sockid[i]);
+            }
+     }
+	close(socket_desc);
+	free(sockid);
+	exit(-1);
+}
+

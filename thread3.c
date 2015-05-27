@@ -11,13 +11,13 @@
 #include <errno.h>
 #include <alsa/asoundlib.h>
 #define ALSA_PCM_NEW_HW_PARAMS_API
-#define SIZE 128
+#define SIZE 64
 
 void *data_sending(void *);
-void *data_sending_handler();
+void data_sending_handler();
 void *data_streaming(void *);
 void closesock(int *sock);
-void *int_hanler();
+void int_handler();
 
 pthread_mutex_t  mutex = PTHREAD_MUTEX_INITIALIZER;
 unsigned char *buffer;
@@ -33,9 +33,9 @@ int main(int argc , char *argv[])
 	
         struct sigaction usr;
         memset(&usr,0,sizeof(struct sigaction));
-        sigemptyset(&usr);
-        sa_usr.sa_handler = int_handler;
-        sigaction(SIGINT, &sa_usr, NULL);
+        sigemptyset(&usr.sa_mask);
+        usr.sa_handler = int_handler;
+        sigaction(SIGINT, &usr, NULL);
 
 
     buffer = (unsigned char *) malloc(SIZE);
@@ -107,14 +107,14 @@ void *data_sending(void *socket_desc)
 {
 	struct sigaction sa_usr;
 	memset(&sa_usr,0,sizeof(struct sigaction));
-	sigemptyset(&sa_usr);
+	sigemptyset(&sa_usr.sa_mask);
 	sa_usr.sa_handler = data_sending_handler;
 	sigaction(SIGUSR1, &sa_usr, NULL);
 	
 	while(1)
 		pause();
 }
-void *data_sending_handler()
+void data_sending_handler()
 {
 	int i;
       for(i = 0; i < cnt; i++) {
@@ -225,7 +225,7 @@ printf("frmes :%d ", frames);
     return 0;
 }
 
-void *int_handler()
+void int_handler()
 {
 int i;
 for (i = 0; i < cnt; i++) {
