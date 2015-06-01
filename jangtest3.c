@@ -13,7 +13,7 @@
 #include <alsa/asoundlib.h>
 #include <time.h>
 #define ALSA_PCM_NEW_HW_PARAMS_API
-#define SIZE 32 
+#define SIZE 64 
 
 void *data_sending(void *);
 void data_sending_handler();
@@ -30,7 +30,7 @@ int delcnt = 0;
 int tid;
 int socket_desc;
 int flag;
-int rc = 0;
+struct timeval tv_timeo = {0.0001,1};
 int main(int argc , char *argv[])
 {
     int client_sock , c , *new_sock;
@@ -45,10 +45,8 @@ int main(int argc , char *argv[])
     sigemptyset(&usr.sa_mask);
     sigaction(SIGINT, &usr, NULL);
     buffer = (unsigned char *) malloc(SIZE);
-    sockid = (int**) malloc(sizeof(int*) * 40);
-   memset(sockid,0 , sizeof(int*) * 40);
-    delsock = (int*)malloc(sizeof(int)*20);
-    memset(delsock, 0, sizeof(int)*20);
+    sockid = (int**) malloc(sizeof(int*) * 10000);
+   memset(sockid,0 , sizeof(int*) * 10000);
     //Prepare the sockaddr_in structure
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -63,7 +61,7 @@ int main(int argc , char *argv[])
     }
 
     setsockopt(socket_desc, SOL_SOCKET, SO_REUSEADDR,&bValid,sizeof(bValid));
-
+   setsockopt( socket_desc, SOL_SOCKET, SO_SNDTIMEO, &tv_timeo, sizeof( tv_timeo )); 
     //Bind
     if( bind(socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0)
     {
@@ -99,10 +97,7 @@ int main(int argc , char *argv[])
                 new_sock = malloc(4);
                 *new_sock = client_sock;
         }
-	   if (cnt < 40)
-		   	 sockid[cnt++] = new_sock;
-	   else
-		   	sockid[delsock[delcnt--]] = new_sock;
+   	 sockid[cnt++] = new_sock;
 
        puts("Handler assigned");
 
@@ -129,17 +124,12 @@ void data_sending_handler()
 {
 	int i;
       	for(i = 0; i < cnt;i++) {
-           if ( *(sockid[i]) != -1 &&  (send(*(sockid[i]), buffer, SIZE, 0) < 0 || signal(SIGPIPE, SIG_IGN) == SIG_ERR )   ) {
-               closesock(sockid[i],i);
+           if ( *(sockid[i]) != -1 && (send(*(sockid[i]), buffer, SIZE, 0) < 0 || signal(SIGPIPE, SIG_IGN) == SIG_ERR )   ) {
+		*sockid[i] = -1;
+               close(*sockid[i]);
                printf("close sock\n : %d",*sockid[i]);
             }
 	}
-}
-void closesock(int *sock,int index)
-{
-	delsock[delcnt++] = index;
-	close(*sock);
-	*sock = -1;
 }
 void *data_streaming(void *socket_desc)
 {
